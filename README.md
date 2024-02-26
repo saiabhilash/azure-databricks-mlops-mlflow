@@ -15,6 +15,10 @@ products:
 
 # Azure Databricks MLOps using MLflow
 
+## Update - Feb 26, 2024
+- Updated the Make file to be compatible with latest Databricks-CLI - 0.214.0
+---
+
 This is a template or sample for [MLOps](https://github.com/microsoft/mlops) for [Python](https://www.python.org) based source code in [Azure Databricks](https://docs.microsoft.com/en-us/azure/databricks/) using [MLflow](https://docs.microsoft.com/en-us/azure/databricks/applications/mlflow/) without using [MLflow Project](https://mlflow.org/docs/latest/projects.html#).
 
 This template provides the following features:
