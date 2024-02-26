@@ -9,3 +9,6 @@ opencensus-ext-logging==0.1.0
 protobuf==3.18.3
 lightgbm==3.3.2
 isort==5.10.1
+requests
+urllib3<2
+flake8==7.0.0 

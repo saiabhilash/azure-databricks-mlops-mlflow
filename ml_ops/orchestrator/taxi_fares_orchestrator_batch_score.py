@@ -33,7 +33,7 @@ dbutils.widgets.text("wheel_package_taxi_fares_mlops_version", "")
 dbutils.widgets.text("execute_feature_engineering", "true")
 dbutils.widgets.text("trained_model_version", "")
 dbutils.widgets.text("scoring_data_start_date", "2016-02-01")
-dbutils.widgets.text("training_data_end_date", "2016-02-29")
+dbutils.widgets.text("scoring_data_end_date", "2016-02-29")
 
 # COMMAND ----------
 
@@ -49,6 +49,7 @@ wheel_package_taxi_fares_mlops_version = dbutils.widgets.get(
 
 # COMMAND ----------
 
+# MAGIC %pip install urllib3
 # MAGIC %pip install $wheel_package_dbfs_base_path/taxi_fares-$wheel_package_taxi_fares_version-py3-none-any.whl # noqa: E501
 # MAGIC %pip install $wheel_package_dbfs_base_path/taxi_fares_mlops-$wheel_package_taxi_fares_mlops_version-py3-none-any.whl # noqa: E501
 

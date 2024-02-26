@@ -1,26 +1,52 @@
 {
-    "job_id": "FILL_JOB_ID",
-    "name": "taxi_fares_batch_scoring",
-    "existing_cluster_id": "FILL_CLUSTER_ID",
-    "notebook_task": {
-        "notebook_path": "/azure-databricks-mlops-mlflow/taxi_fares_orchestrator_batch_score",
-        "base_parameters": {
-            "taxi_fares_raw_data": "/databricks-datasets/nyctaxi-with-zipcodes/subsampled",
-            "taxi_fares_mount_point": "/mnt/data_batch",
-            "mlflow_experiment_id": "FILL_MLFLOW_EXPERIMENT_ID",
-            "execute_feature_engineering": "true",
-            "scoring_data_start_date": "2016-02-01",
-            "scoring_data_end_date": "2016-02-29",
-            "trained_model_version": "",
-            "wheel_package_dbfs_base_path": "/dbfs/FileStore/libraries/azure-databricks-mlops-mlflow",
-            "wheel_package_taxi_fares_version": "0.0.1",
-            "wheel_package_taxi_fares_mlops_version": "0.0.1"
-        }
-    },
-    "timeout_seconds": 86400,
-    "email_notifications": {
-        "on_start": [],
-        "on_success": [],
-        "on_failure": []
-    }
+	"job_id": "FILL_JOB_ID",
+	"new_settings": {
+		"name": "taxi_fares_batch_scoring",
+		"description": "This job trains the taxi fares model",
+		"queue": {
+			"enabled": true
+		},
+		"tags": {
+			"cost-center": "engineering",
+			"team": "jobs"
+		},
+		"tasks": [
+			{
+				"task_key": "taxi_fares_batch_scoring",
+				"description": "Trains the taxi fares model",
+				"depends_on": [],
+				"timeout_seconds": 86400,
+				"notebook_task": {
+					"notebook_path": "/azure-databricks-mlops-mlflow/taxi_fares_orchestrator_batch_score",
+					"base_parameters": {
+						"taxi_fares_raw_data": "/databricks-datasets/nyctaxi-with-zipcodes/subsampled",
+						"mlflow_experiment_id": "FILL_MLFLOW_EXPERIMENT_ID",
+						"wheel_package_dbfs_base_path": "/dbfs/FileStore/libraries/azure-databricks-mlops-mlflow",
+						"wheel_package_taxi_fares_version": "0.0.1",
+						"wheel_package_taxi_fares_mlops_version": "0.0.1",
+						"execute_feature_engineering": "true",
+						"training_data_end_date": "2016-01-31",
+						"training_data_start_date": "2016-01-01",
+						"training_num_leaves": "32",
+						"training_objective": "regression",
+						"training_metric": "rmse",
+						"training_num_rounds": "100"
+					}
+				},
+				"existing_cluster_id": "FILL_CLUSTER_ID"
+			}
+		],
+		"schedule": {
+			"quartz_cron_expression": "26 45 18 * * ?",
+			"timezone_id": "UTC",
+			"pause_status": "UNPAUSED"
+		},
+		"email_notifications": {
+			"on_start": [],
+			"on_success": [],
+			"on_failure": []
+		},
+		"timeout_seconds": 86400,
+		"max_concurrent_runs": 1
+	}
 }

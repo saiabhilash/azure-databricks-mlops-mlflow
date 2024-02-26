@@ -40,12 +40,12 @@ dist: dist-ml dist-mlops
 
 ## install ml locally
 install-ml: clean
-	python ml_source/src/setup.py install
+	python ml_source/src/setup.py install --user
 	rm -fr build/
 
 ## install mlops locally
 install-mlops: clean
-	python ml_ops/src/setup.py install
+	python ml_ops/src/setup.py install --user
 	rm -fr build/
 
 ## install all locally
@@ -53,22 +53,22 @@ install: install-ml install-mlops
 
 ## unit test ml locally
 test-ml: install-ml
-	cd ml_source && coverage run --source=taxi_fares,monitoring -m unittest discover
-	cd ml_source && coverage report -m
+	cd ml_source && python -m coverage run --source=taxi_fares,monitoring -m unittest discover
+	cd ml_source && python -m coverage report -m
 
 ## unit test mlops locally
 test-mlops: install-mlops
-	cd ml_ops && coverage run --source=taxi_fares_mlops -m unittest discover
-	cd ml_ops && coverage report -m
+	cd ml_ops && python -m coverage run --source=taxi_fares_mlops -m unittest discover
+	cd ml_ops && python -m coverage report -m
 
 ## unit test all locally
 test: test-ml test-mlops
-	coverage combine ml_source/.coverage ml_ops/.coverage
-	coverage report
+	python -m coverage combine ml_source/.coverage ml_ops/.coverage
+	python -m coverage report
 
 ## lint all python src and tests
 lint:
-	flake8 --max-line-length=88 ml_ops/src ml_ops/tests ml_source/src ml_source/tests
+	python -m flake8 --max-line-length=100 ml_ops/src ml_ops/tests ml_source/src ml_source/tests
 
 ## databricks authenticate
 databricks-authenticate:
@@ -91,41 +91,56 @@ databricks-init:
 	databricks workspace mkdirs /azure-databricks-mlops-mlflow; \
 	echo "Creating databricks dbfs root directory"; \
 	databricks fs mkdirs dbfs:/FileStore/libraries/azure-databricks-mlops-mlflow; \
-	CLUSTER_ID="$$(databricks clusters list --output json | \
-				   jq ".clusters[] | select(.cluster_name == \"azure-databricks-mlops-mlflow\") | .cluster_id")"; \
+	CLUSTER_ID="$$(databricks clusters list --output json | jq ".[] | select(.cluster_name == \"azure-databricks-mlops-mlflow\") | .cluster_id")"; \
 	echo "Got existing cluster azure-databricks-mlops-mlflow with id: $$CLUSTER_ID"; \
 	if [[ $$CLUSTER_ID == "" ]]; then \
 		echo "Creating databricks cluster azure-databricks-mlops-mlflow"; \
 		databricks clusters create --json-file ml_ops/deployment/databricks/cluster_template.json; \
 	fi; \
 	SECRET_SCOPE_NAME="$$(databricks secrets list-scopes --output json | \
-				   jq ".scopes[] | select(.name == \"azure-databricks-mlops-mlflow\") | .name")"; \
+				   jq ".[] | select(.name == \"azure-databricks-mlops-mlflow\") | .name")"; \
 	echo "Got existing secret scope $$SECRET_SCOPE_NAME"; \
 	if [[ $$SECRET_SCOPE_NAME == "" ]]; then \
 		echo "Creating databricks secret scope azure-databricks-mlops-mlflow"; \
-		databricks secrets create-scope --scope azure-databricks-mlops-mlflow --initial-manage-principal users; \
+		databricks secrets create-scope azure-databricks-mlops-mlflow --initial-manage-principal users; \
 	fi; \
-	MLFLOW_EXPERIMENT_ID="$$(source .env/.databricks_env.sh && mlflow experiments list | \
+	MLFLOW_EXPERIMENT_ID="$$(source .env/.databricks_env.sh && python -m mlflow experiments search -v all | \
 							 grep '/azure-databricks-mlops-mlflow/Experiment' | \
 							 cut -d' ' -f 1)"; \
 	echo "Got existing mlflow experiment id: $$MLFLOW_EXPERIMENT_ID"; \
 	if [[ "$$MLFLOW_EXPERIMENT_ID" == "" ]]; then \
 		echo "Creating mlflow experiment in databricks workspace /azure-databricks-mlops-mlflow/Experiment directory"; \
-		source .env/.databricks_env.sh && mlflow experiments create --experiment-name /azure-databricks-mlops-mlflow/Experiment; \
+		source .env/.databricks_env.sh && python -m mlflow experiments create --experiment-name /azure-databricks-mlops-mlflow/Experiment; \
 	fi; \
+
+.PHONY: databricks-secrets-put
 
 ## databricks secrets put
 databricks-secrets-put:
 	$(info Put databricks secret azure-blob-storage-account-name)
 	@read -p "Enter Azure Blob storage Account Name: " stg_account_name; \
-	databricks secrets put --scope azure-databricks-mlops-mlflow --key azure-blob-storage-account-name --string-value $$stg_account_name
+		databricks secrets put-secret --json "{ \
+			\"scope\": \"azure-databricks-mlops-mlflow\", \
+			\"key\": \"azure-blob-storage-account-name\", \
+			\"string_value\": \"$$stg_account_name\" \
+		}"; \
+
 	$(info Put databricks secret azure-blob-storage-container-name)
 	@read -p "Enter Azure Blob storage Container Name: " stg_container_name; \
-	databricks secrets put --scope azure-databricks-mlops-mlflow --key azure-blob-storage-container-name --string-value $$stg_container_name
+		databricks secrets put-secret --json "{ \
+			\"scope\": \"azure-databricks-mlops-mlflow\", \
+			\"key\": \"azure-blob-storage-container-name\", \
+			\"string_value\": \"$$stg_container_name\" \
+		}"; \
+	
 	$(info Put databricks secret azure-shared-access-key)
 	$(info Mount Blob Storage https://docs.microsoft.com/en-gb/azure/databricks/data/data-sources/azure/azure-storage)
 	@read -p "Enter Azure Blob storage Shared Access Key: " shared_access_key; \
-	databricks secrets put --scope azure-databricks-mlops-mlflow --key azure-blob-storage-shared-access-key --string-value $$shared_access_key
+		databricks secrets put-secret --json "{ \
+			\"scope\": \"azure-databricks-mlops-mlflow\", \
+			\"key\": \"azure-blob-storage-shared-access-key\", \
+			\"string_value\": \"$$shared_access_key\" \
+		}"; \
 	
 ## databricks secrets put application insights key
 databricks-add-app-insights-key:
@@ -133,42 +148,46 @@ databricks-add-app-insights-key:
 	@read -p "Enter App insights key: " app_insights_key; \
 	if [[ "$$app_insights_key" != '' ]]; then \
 		echo "Setting app insights key : $$app_insights_key "; \
-		databricks secrets put --scope azure-databricks-mlops-mlflow --key app_insights_key --string-value "$$app_insights_key"; \
+		databricks secrets put-secret --json "{ \
+			\"scope\": \"azure-databricks-mlops-mlflow\", \
+			\"key\": \"app_insights_key\", \
+			\"string_value\": \"$$app_insights_key\" \
+		}"; \
 	fi; \
 
 ## databricks deploy (upload wheel pacakges to databricks DBFS workspace)
 databricks-deploy-code: dist
 	$(info Upload wheel packages into databricks dbfs root directory)
-	databricks fs cp --overwrite --recursive dist/ dbfs:/FileStore/libraries/azure-databricks-mlops-mlflow/
+	databricks fs cp --recursive dist/ dbfs:/FileStore/libraries/azure-databricks-mlops-mlflow/
 	$(info Importing orchestrator notebooks into databricks workspace root directory)
-	databricks workspace import_dir --overwrite ml_ops/orchestrator/ /azure-databricks-mlops-mlflow/
+	databricks workspace import-dir ml_ops/orchestrator/ /azure-databricks-mlops-mlflow/
 	$(info Create or update databricks jobs)
 
 ## databricks deploy jobs (create databricks jobs)
 databricks-deploy-jobs: databricks-deploy-code
 	$(info Getting required values from databricks)
 	CLUSTER_ID="$$(databricks clusters list --output json | \
-				   jq ".clusters[] | select(.cluster_name == \"azure-databricks-mlops-mlflow\") | .cluster_id")"; \
+				   jq ".[] | select(.cluster_name == \"azure-databricks-mlops-mlflow\") | .cluster_id")"; \
 	echo "Got existing cluster id: $$CLUSTER_ID"; \
 	TRAINING_JOB_ID="$$(databricks jobs list --output json | \
-						jq ".jobs[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
+						jq ".[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
 	echo "Got existing taxi_fares_model_training job id: $$TRAINING_JOB_ID"; \
 	if [[ "$$TRAINING_JOB_ID" == "" ]]; then \
 		databricks jobs create --json "{\"name\": \"taxi_fares_model_training\", \"existing_cluster_id\": $$CLUSTER_ID}"; \
 		TRAINING_JOB_ID="$$(databricks jobs list --output json | \
-							jq ".jobs[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
+							jq ".[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
 		echo "Created taxi_fares_model_training with job id: $$TRAINING_JOB_ID"; \
 	fi; \
 	BATCH_SCORING_JOB_ID="$$(databricks jobs list --output json | \
-							 jq ".jobs[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
+							 jq ".[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
 	echo "Got existing taxi_fares_batch_scoring job id: $$BATCH_SCORING_JOB_ID"; \
 	if [[ "$$BATCH_SCORING_JOB_ID" == "" ]]; then \
 		databricks jobs create --json "{\"name\": \"taxi_fares_batch_scoring\", \"existing_cluster_id\": $$CLUSTER_ID}"; \
 		BATCH_SCORING_JOB_ID="$$(databricks jobs list --output json | \
-								 jq ".jobs[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
+								 jq ".[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
 		echo "Created taxi_fares_batch_scoring with job id: $$BATCH_SCORING_JOB_ID"; \
 	fi; \
-	MLFLOW_EXPERIMENT_ID="$$(source .env/.databricks_env.sh && mlflow experiments list | \
+	MLFLOW_EXPERIMENT_ID="$$(source .env/.databricks_env.sh && python -m mlflow experiments search -v all | \
 							 grep '/azure-databricks-mlops-mlflow/Experiment' | \
 							 cut -d' ' -f 1)"; \
 	echo "Got existing mlflow experiment id: $$MLFLOW_EXPERIMENT_ID"; \
@@ -177,13 +196,13 @@ databricks-deploy-jobs: databricks-deploy-code
 								 sed "s/\"FILL_JOB_ID\"/$$TRAINING_JOB_ID/" | \
 								 sed "s/FILL_MLFLOW_EXPERIMENT_ID/$$MLFLOW_EXPERIMENT_ID/" | \
 								 sed "s/\"FILL_CLUSTER_ID\"/$$CLUSTER_ID/")"; \
-	databricks jobs reset --job-id $$TRAINING_JOB_ID --json "$$TRAINING_JOB_UPDATE_JSON"; \
+	databricks jobs reset --json "$$TRAINING_JOB_UPDATE_JSON"; \
 	echo "Updating taxi_fares_batch_scoring by using template ml_ops/deployment/databricks/job_template_taxi_fares_batch_scoring.json"; \
 	BATCH_SCORING_JOB_UPDATE_JSON="$$(cat ml_ops/deployment/databricks/job_template_taxi_fares_batch_scoring.json | \
-								 sed "s/\"FILL_JOB_ID\"/$$BATCH_SCORING_JOB_ID/" | \
-								 sed "s/FILL_MLFLOW_EXPERIMENT_ID/$$MLFLOW_EXPERIMENT_ID/" | \
-								 sed "s/\"FILL_CLUSTER_ID\"/$$CLUSTER_ID/")"; \
-	databricks jobs reset --job-id $$BATCH_SCORING_JOB_ID --json "$$BATCH_SCORING_JOB_UPDATE_JSON"; \
+								sed "s/\"FILL_JOB_ID\"/$$BATCH_SCORING_JOB_ID/" | \
+								sed "s/FILL_MLFLOW_EXPERIMENT_ID/$$MLFLOW_EXPERIMENT_ID/" | \
+								sed "s/\"FILL_CLUSTER_ID\"/$$CLUSTER_ID/")"; \
+	databricks jobs reset --json "$$BATCH_SCORING_JOB_UPDATE_JSON"; \
 
 ## deploy databricks all
 deploy: databricks-deploy-jobs
@@ -192,22 +211,19 @@ deploy: databricks-deploy-jobs
 run-taxifares-model-training:
 	$(info Triggering model training job)
 	TRAINING_JOB_ID="$$(databricks jobs list --output json | \
-						jq ".jobs[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
-	RUN_ID="$$(databricks jobs run-now --job-id $$TRAINING_JOB_ID | \
-			   jq ".number_in_job")"; \
+						jq ".[] | select(.settings.name == \"taxi_fares_model_training\") | .job_id")"; \
+	RUN_ID="$$(databricks jobs run-now --json "{\"job_id\": $$TRAINING_JOB_ID}")"; \
 	DATABRICKS_HOST="$$(cat ~/.databrickscfg | grep '^host' | cut -d' ' -f 3)"; \
 	DATABRICKS_ORG_ID="$$(echo $$DATABRICKS_HOST | cut -d'-' -f 2 | cut -d'.' -f 1)"; \
 	echo "Open the following link in browser to check result -"; \
 	echo "$$DATABRICKS_HOST/?o=$$DATABRICKS_ORG_ID/#job/$$TRAINING_JOB_ID/run/$$RUN_ID"; \
 
-	
 ## run databricks taxi_fares_batch_scoring job
 run-taxifares-batch-scoring:
 	$(info Triggering batch scoring job)
 	BATCH_SCORING_JOB_ID="$$(databricks jobs list --output json | \
-							 jq ".jobs[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
-	RUN_ID="$$(databricks jobs run-now --job-id $$BATCH_SCORING_JOB_ID | \
-			   jq ".number_in_job")"; \
+							 jq ".[] | select(.settings.name == \"taxi_fares_batch_scoring\") | .job_id")"; \
+	RUN_ID="$$(databricks jobs run-now --json "{\"job_id\": $$BATCH_SCORING_JOB_ID}")"; \
 	DATABRICKS_HOST="$$(cat ~/.databrickscfg | grep '^host' | cut -d' ' -f 3)"; \
 	DATABRICKS_ORG_ID="$$(echo $$DATABRICKS_HOST | cut -d'-' -f 2 | cut -d'.' -f 1)"; \
 	echo "Open the following link in browser to check result -"; \

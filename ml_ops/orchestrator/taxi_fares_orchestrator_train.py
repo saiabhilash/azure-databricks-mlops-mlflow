@@ -50,7 +50,7 @@ wheel_package_taxi_fares_mlops_version = dbutils.widgets.get(
 )
 
 # COMMAND ----------
-
+# MAGIC %pip install urllib3
 # MAGIC %pip install $wheel_package_dbfs_base_path/taxi_fares-$wheel_package_taxi_fares_version-py3-none-any.whl # noqa: E501
 # MAGIC %pip install $wheel_package_dbfs_base_path/taxi_fares_mlops-$wheel_package_taxi_fares_mlops_version-py3-none-any.whl # noqa: E501
 
